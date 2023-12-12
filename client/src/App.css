@@ -119,3 +119,9 @@
     transform: rotate(360deg);
   }
 }
+.ai-generated-image {
+  max-width: 100%;
+  height: auto;
+  margin-top: 10px;
+  border-radius: 5px; /* Optional: Rounded corners */
+}

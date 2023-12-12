@@ -2,7 +2,7 @@
 // const { Configuration, OpenAIApi } = require("openai");
 // const configuration = new Configuration({
 //     organization: "org-rJK0lhu1nDdDGilWDk2eCXUA",
-//     apiKey: "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",
+//     apiKey: "",
 // });
 
 // const openai = new OpenAIApi(configuration);
@@ -31,7 +31,7 @@
 
 
 // const openai = new OpenAI({
-//   apiKey: "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"
+//   apiKey: ""
 // });
 
 // const app = express();
@@ -91,6 +91,7 @@
 
 
 // LOOOLL
+require('dotenv').config();
 const express = require('express');
 const OpenAI = require("openai");
 const bodyParser = require('body-parser');
@@ -98,7 +99,7 @@ const cors = require('cors');
 
 // Initialize OpenAI with your API key
 const openai = new OpenAI({
-  apiKey: ""
+    apiKey: process.env.OPENAI_API_KEY
 });
 
 const app = express();
@@ -110,6 +111,7 @@ const PORT = 3080;
 // Function to call OpenAI API
 const callApi = async (userMessage) => {
     try {
+        const startTime = Date.now();
         const systemMessage = { role: 'system', content: 'You are a helpful assistant.' };
         const assistantMessage = { role: 'assistant', content: 'How can I help you today?' };
         const user = { role: 'user', content: userMessage };
@@ -117,10 +119,13 @@ const callApi = async (userMessage) => {
         const chatCompletion = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
             messages: [systemMessage, assistantMessage, user],
-            max_tokens: 1024
+            max_tokens: 200
         });
+        const endTime = Date.now(); // Record end time
+        const duration = endTime - startTime; // Calculate duration
 
         console.log("OpenAI API Response:", JSON.stringify(chatCompletion, null, 2));
+        console.log(`API call duration: ${duration}ms`); // Log the duration
 
         if (chatCompletion && chatCompletion.choices && chatCompletion.choices.length > 0) {
             const choice = chatCompletion.choices[0];
