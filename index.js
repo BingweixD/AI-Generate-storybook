@@ -76,33 +76,33 @@ const generateImage = async (story) => {
     }
 };
 
-// const mainProcess = async (inputText) => {
-//     try {
-//         let textForImageGeneration = inputText;
+const mainProcess = async (inputText) => {
+    try {
+        let textForImageGeneration = inputText;
 
-//         // Check if the text exceeds 1000 characters
-//         if (inputText.length > 1000) {
-//             console.log("Text exceeds 1000 characters, summarizing...");
-//             textForImageGeneration = await summarizeWithChatGPT(inputText);
-//         }
+        // Check if the text exceeds 1000 characters
+        if (inputText.length > 1000) {
+            console.log("Text exceeds 1000 characters, summarizing...");
+            textForImageGeneration = await summarizeWithChatGPT(inputText);
+        }
 
-//         // Generate image with DALL-E
-//         const imageUrl = await generateImage(textForImageGeneration);
-//         console.log(`Image generated: ${imageUrl}`);
-//         return imageUrl;
-//     } catch (error) {
-//         console.error("Error in main process:", error);
-//         return null;
-//     }
-// };
-// const longText = "Imagine a long text here over 1000 characters..."; // Your actual text here
-// mainProcess(longText)
-//     .then(imageUrl => {
-//         if (imageUrl) {
-//             console.log(`Generated Image URL: ${imageUrl}`);
-//         }
-//     })
-//     .catch(error => console.error(error));
+        // Generate image with DALL-E
+        const imageUrl = await generateImage(textForImageGeneration);
+        console.log(`Image generated: ${imageUrl}`);
+        return imageUrl;
+    } catch (error) {
+        console.error("Error in main process:", error);
+        return null;
+    }
+};
+const longText = "Imagine a long text here over 1000 characters..."; // Your actual text here
+mainProcess(longText)
+    .then(imageUrl => {
+        if (imageUrl) {
+            console.log(`Generated Image URL: ${imageUrl}`);
+        }
+    })
+    .catch(error => console.error(error));
 
 
 const callApi = async (userMessage, chatLog) => {
