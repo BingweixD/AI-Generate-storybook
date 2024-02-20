@@ -4,6 +4,8 @@ const OpenAI = require("openai");
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const axios = require('axios');
+const PDFDocument = require('pdfkit');
+const fetch = require('node-fetch');
 
 // Initialize OpenAI with your API key
 const openai = new OpenAI({
@@ -76,33 +78,33 @@ const generateImage = async (story) => {
     }
 };
 
-const mainProcess = async (inputText) => {
-    try {
-        let textForImageGeneration = inputText;
+// const mainProcess = async (inputText) => {
+//     try {
+//         let textForImageGeneration = inputText;
 
-        // Check if the text exceeds 1000 characters
-        if (inputText.length > 1000) {
-            console.log("Text exceeds 1000 characters, summarizing...");
-            textForImageGeneration = await summarizeWithChatGPT(inputText);
-        }
+//         // Check if the text exceeds 1000 characters
+//         if (inputText.length > 1000) {
+//             console.log("Text exceeds 1000 characters, summarizing...");
+//             textForImageGeneration = await summarizeWithChatGPT(inputText);
+//         }
 
-        // Generate image with DALL-E
-        const imageUrl = await generateImage(textForImageGeneration);
-        console.log(`Image generated: ${imageUrl}`);
-        return imageUrl;
-    } catch (error) {
-        console.error("Error in main process:", error);
-        return null;
-    }
-};
-const longText = "Imagine a long text here over 1000 characters..."; // Your actual text here
-mainProcess(longText)
-    .then(imageUrl => {
-        if (imageUrl) {
-            console.log(`Generated Image URL: ${imageUrl}`);
-        }
-    })
-    .catch(error => console.error(error));
+//         // Generate image with DALL-E
+//         const imageUrl = await generateImage(textForImageGeneration);
+//         console.log(`Image generated: ${imageUrl}`);
+//         return imageUrl;
+//     } catch (error) {
+//         console.error("Error in main process:", error);
+//         return null;
+//     }
+// };
+// const longText = "Imagine a long text here over 1000 characters..."; // Your actual text here
+// mainProcess(longText)
+//     .then(imageUrl => {
+//         if (imageUrl) {
+//             console.log(`Generated Image URL: ${imageUrl}`);
+//         }
+//     })
+//     .catch(error => console.error(error));
 
 
 const callApi = async (userMessage, chatLog) => {
@@ -315,6 +317,51 @@ app.post('/generate-image', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+app.post('/generate-pdf', async (req, res) => {
+    const { chatLog, imageUrl } = req.body;
+
+    // Create a new PDF document
+    const doc = new PDFDocument();
+    const buffers = [];
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', () => {
+        const pdfData = Buffer.concat(buffers);
+        res.writeHead(200, {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment;filename=storybook.pdf',
+        }).end(pdfData);
+    });
+
+    // Add text to the PDF from chatLog
+    chatLog.forEach(entry => {
+        if (entry.role === 'gpt') {
+            doc.font('Times-Roman').fontSize(14).fillColor('blue');
+        } else {
+            doc.font('Times-Roman').fontSize(14).fillColor('black');
+        }
+        doc.text(entry.message, {
+            paragraphGap: 5,
+            indent: 20,
+            align: 'justify',
+            columns: 1,
+        });
+        doc.moveDown();
+    });
+
+    // Add the image to the PDF
+    const response = await fetch(imageUrl);
+    const imageBuffer = await response.buffer();
+    doc.addPage().image(imageBuffer, {
+        fit: [500, 500],
+        align: 'center',
+        valign: 'center'
+    });
+
+    // Finalize the PDF file
+    doc.end();
+});
+
 
 
 
