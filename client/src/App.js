@@ -8,7 +8,7 @@ function App() {
   const [input, setInput] = useState("");
   const [chatLog, setChatlog] = useState([{
     role:"gpt", 
-      message: "Ready to craft a children's story? Share some key details to get started:\n\n1. **Setting**: Describe the story's location and time.\n2. **Characters**: Introduce the main characters, their traits, and any special abilities.\n3. **Plot**: Outline the main events and challenges.\n4. **Theme**: What's the story's moral or message?\n5. **Visual Elements**: Highlight any scenes or elements for illustrations.\n\nAdd any extra details for your story. After planning, we'll choose an art style for the illustrations. Consider styles or artists that inspire you for the artwork (e.g., watercolor, digital)."
+      message: "Lets craft a children's story together! Share some key details to get started:\n\n1. **Setting**: Describe the story's location and time.\n2. **Characters**: Introduce the main characters, their traits, and any special abilities.\n3. **Plot**: Outline the main events and challenges.\n4. **Theme**: What's the story's moral or message?\n5. **Visual Elements**: Highlight any scenes or elements for illustrations.\n\nAdd any extra details for your story. After planning, we'll choose an art style for the illustrations. Consider styles or artists that inspire you for the artwork (e.g., watercolor, digital)."
     },
 ]);
 async function handleGenerateImage() {
@@ -38,6 +38,33 @@ async function handleGenerateImage() {
     }
   } catch (error) {
     console.error("Error generating image:", error);
+  }
+}
+
+async function generatePDF() {
+  // Get the last image URL from chatLog
+  const lastEntry = chatLog[chatLog.length - 1];
+  const imageUrl = lastEntry.role === 'gpt' ? lastEntry.message.replace('Image URL: ', '') : null;
+
+  // Call the backend endpoint with the chatLog and imageUrl
+  const response = await fetch('http://localhost:3080/generate-pdf', {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ chatLog, imageUrl })
+  });
+
+  if (response.ok) {
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'storybook.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  } else {
+      console.error('Failed to generate PDF');
   }
 }
 
@@ -96,6 +123,7 @@ async function handleSubmit(e) {
         </div>
         <div className ="chat-input-holder">
         <button onClick={handleGenerateImage}>Generate Image</button>
+        <button onClick={generatePDF}>Create PDF</button>
           <form onSubmit = {handleSubmit}>
             <input 
               rows="1"
