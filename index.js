@@ -19,43 +19,27 @@ app.use(cors());
 
 const PORT = 3080;
 
-// Function to summarize the story
-const summarizeWithChatGPT = async (text) => {
+
+const generateImage = async (story, styleHints, previousAttributes, referenceImages = []) => {
     try {
-        const response = await axios.post(
-            'https://api.openai.com/v1/completions',
-            {
-                model: 'text-davinci-003', // Adjust according to your OpenAI plan and available models
-                prompt: `Summarize this to under 1000 characters:\n\n${text}`,
-                max_tokens: 300, // Adjust based on your needs
-                temperature: 0.7,
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
+        let prompt = `${story}.`; 
+        if (styleHints) {
+            prompt += ` The style should be consistent with ${styleHints}, influenced by [specific artists, art movements, or styles].`;
+        }
+        if (previousAttributes) {
+            prompt += ` This image should include ${previousAttributes}, maintaining the color palette and character design of previous images.`;
+        }
+        if (referenceImages.length > 0) {
+            prompt += ` Reference images are provided to maintain consistency.`;
+        }
+        prompt += "summerize the story and make sure there is no words in the image";
 
-        return response.data.choices[0].text.trim();
-    } catch (error) {
-        console.error("Error in summarization:", error);
-        throw new Error("Failed to summarize the text.");
-    }
-};
-
-
-
-
-const generateImage = async (story) => {
-    try {
-        // Replace 'process.env.OPENAI_API_KEY' with your actual OpenAI API key
         const response = await axios.post('https://api.openai.com/v1/images/generations', {
             model: "dall-e-3",
-            prompt: `${story}. There should be no text in the image.`,
+            prompt: prompt,
             n: 1,
             size: "1024x1024",
+            // If the API supports directly attaching reference images or their IDs, add them here
         }, {
             headers: {
                 "Content-Type": "application/json",
@@ -63,9 +47,8 @@ const generateImage = async (story) => {
             }
         });
 
-        // Check if the response contains the image data
         if (response.data && response.data.data && response.data.data.length > 0) {
-            const imageUrl = response.data.data[0].url; // Extract the image URL
+            const imageUrl = response.data.data[0].url;
             console.log("Generated Image URL:", imageUrl);
             return imageUrl;
         } else {
@@ -77,34 +60,6 @@ const generateImage = async (story) => {
         return '';
     }
 };
-
-// const mainProcess = async (inputText) => {
-//     try {
-//         let textForImageGeneration = inputText;
-
-//         // Check if the text exceeds 1000 characters
-//         if (inputText.length > 1000) {
-//             console.log("Text exceeds 1000 characters, summarizing...");
-//             textForImageGeneration = await summarizeWithChatGPT(inputText);
-//         }
-
-//         // Generate image with DALL-E
-//         const imageUrl = await generateImage(textForImageGeneration);
-//         console.log(`Image generated: ${imageUrl}`);
-//         return imageUrl;
-//     } catch (error) {
-//         console.error("Error in main process:", error);
-//         return null;
-//     }
-// };
-// const longText = "Imagine a long text here over 1000 characters..."; // Your actual text here
-// mainProcess(longText)
-//     .then(imageUrl => {
-//         if (imageUrl) {
-//             console.log(`Generated Image URL: ${imageUrl}`);
-//         }
-//     })
-//     .catch(error => console.error(error));
 
 
 const callApi = async (userMessage, chatLog) => {
@@ -144,7 +99,7 @@ const callApi = async (userMessage, chatLog) => {
 
         const chatCompletion = await openai.chat.completions.create({
             model: "ft:gpt-3.5-turbo-1106:personal::8hke3Plj",
-            messages: formattedMessages,
+            messages: formattedMessages.concat([{role: 'system', content: 'Please focus on helping the user create a story. Tell user that it is not related to story creation and get back in creating children story.'}]),
             max_tokens: 1000
         });
         const endTime = Date.now(); // Record end time
@@ -175,95 +130,6 @@ const callApi = async (userMessage, chatLog) => {
 };
 
 
-
-// Assuming all necessary imports and initialization as before
-
-// A simple in-memory structure to hold conversation. For production, consider a more persistent solution.
-let conversations = {};
-
-// app.post('/', async (req, res) => {
-//     const { userId, message } = req.body;
-
-//     // Initialize conversation if not exists
-//     if (!conversations[userId]) {
-//         conversations[userId] = [];
-//     }
-
-//     try {
-//         // Push the new user message into the conversation array
-//         conversations[userId].push({ role: "user", content: message });
-
-//         // Generate a response from OpenAI
-//         const chatResponse = await openai.chat.completions.create({
-//             model: "gpt-4-turbo-preview",
-//             messages: conversations[userId],
-//         });
-
-//         let replyText = "";
-//         let imageUrl = "";
-
-//         if (chatResponse && chatResponse.data && chatResponse.data.choices && chatResponse.data.choices.length > 0) {
-//             replyText = chatResponse.data.choices[0].message.content.trim();
-//             // Save bot's reply into the conversation
-//             conversations[userId].push({ role: "assistant", content: replyText });
-
-//             // Concatenate all conversation texts to check the length
-//             const conversationText = conversations[userId].map(m => m.content).join(" ");
-
-//             // If conversation length exceeds a certain limit, summarize
-//             if (conversationText.split(' ').length > 400) {
-//                 const summary = await summarizeStory(conversationText);
-//                 imageUrl = await generateImage(summary); // Generate an image based on the summary
-//             } else {
-//                 // Optionally, generate an image directly from the latest bot's response or skip
-//                 // imageUrl = await generateImage(replyText);
-//             }
-
-//             console.log('Generated Image URL:', imageUrl);
-//             res.json({ reply: replyText, imageUrl });
-//         } else {
-//             console.error("No reply from AI:", chatResponse);
-//             res.status(500).json({ error: "Failed to generate a reply." });
-//         }
-//     } catch (error) {
-//         console.error("Error handling chat request:", error);
-//         res.status(500).json({ error: error.message });
-//     }
-// });
-// app.post('/', async (req, res) => {
-//     try {
-//         const { userMessage, chatLog } = req.body;
-//         console.log('Received user message:', userMessage);
-//         console.log('Received chat log:', chatLog);
-
-//         // Process the user's message to generate a response
-//         const response = await callApi(userMessage, chatLog);
-//         if (!response || response.startsWith('Invalid')) {
-//             console.error("Failed to generate response:", response);
-//             return res.status(400).json({ error: response });
-//         }
-
-//         // Summarize the generated response
-//         const summary = await summarizeStory(response);
-//         if (!summary) {
-//             console.error("Failed to summarize the story.");
-//             return res.status(500).json({ error: 'Failed to summarize the story.' });
-//         }
-
-//         // Generate an image based on the summary
-//         const imageUrl = await generateImage(summary);
-//         if (!imageUrl) {
-//             console.error("Failed to generate an image.");
-//             return res.status(500).json({ error: 'Failed to generate an image.' });
-//         }
-
-//         // Return the original response, summary, and image URL to the client
-//         res.json({ message: response, summary, imageUrl });
-//     } catch (error) {
-//         console.error("Error handling request:", error);
-//         res.status(500).json({ error: error.message });
-//     }
-// });
 app.post('/', async (req, res) => {
     try {
         const { userMessage, chatLog } = req.body;
@@ -301,11 +167,11 @@ app.post('/', async (req, res) => {
 // Near the bottom of your backend file, before app.listen()
 
 app.post('/generate-image', async (req, res) => {
-    const { prompt } = req.body;
+    const { prompt, styleHints, previousAttributes } = req.body;
     console.log('Received prompt for image generation:', prompt);
 
     try {
-        const imageUrl = await generateImage(prompt); // Use the provided prompt for image generation
+        const imageUrl = await generateImage(prompt, styleHints, previousAttributes);
         if (!imageUrl) {
             console.error("Failed to generate image.");
             return res.status(400).json({ error: 'Failed to generate an image.' });
@@ -317,13 +183,21 @@ app.post('/generate-image', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
+function getNextImageUrl(chatLog, currentIndex, usedImageUrls) {
+    for (let i = currentIndex + 1; i < chatLog.length; i++) {
+        if (chatLog[i].message.startsWith('Image URL: ') && !usedImageUrls.has(chatLog[i].message)) {
+            usedImageUrls.add(chatLog[i].message);
+            return chatLog[i].message.replace('Image URL: ', '');
+        }
+    }
+    return null; // Return null if there's no image URL after the current text entry.
+}
 app.post('/generate-pdf', async (req, res) => {
-    const { chatLog, imageUrl } = req.body;
+    const { chatLog, requestedPages } = req.body;
 
-    // Create a new PDF document
     const doc = new PDFDocument();
     const buffers = [];
+    let usedImageUrls = new Set();
     doc.on('data', buffers.push.bind(buffers));
     doc.on('end', () => {
         const pdfData = Buffer.concat(buffers);
@@ -333,35 +207,47 @@ app.post('/generate-pdf', async (req, res) => {
         }).end(pdfData);
     });
 
-    // Add text to the PDF from chatLog
-    chatLog.forEach(entry => {
-        if (entry.role === 'gpt') {
-            doc.font('Times-Roman').fontSize(14).fillColor('blue');
-        } else {
-            doc.font('Times-Roman').fontSize(14).fillColor('black');
-        }
-        doc.text(entry.message, {
+    // Sort and select text responses
+    let selectedTextResponses = chatLog.filter(entry => entry.role === 'gpt' && !entry.message.startsWith('Image URL: '))
+    
+                                       .map((entry, index) => ({ ...entry, originalIndex: index }))
+                                       .sort((a, b) => b.message.length - a.message.length)
+                                       .slice(0, requestedPages)
+                                       .sort((a, b) => a.originalIndex - b.originalIndex);
+
+    // Process each selected text response and fetch its corresponding image
+    for (const response of selectedTextResponses) {
+        // Add text to the PDF
+        doc.addPage();
+        doc.font('Times-Roman').fontSize(14).fillColor('blue');
+        doc.text(response.message, {
             paragraphGap: 5,
             indent: 20,
             align: 'justify',
             columns: 1,
         });
-        doc.moveDown();
-    });
+        // Fetch the image associated with this text entry
+        let imageUrl = getNextImageUrl(chatLog, response.originalIndex, usedImageUrls); // Pass usedImageUrls here
 
-    // Add the image to the PDF
-    const response = await fetch(imageUrl);
-    const imageBuffer = await response.buffer();
-    doc.addPage().image(imageBuffer, {
-        fit: [500, 500],
-        align: 'center',
-        valign: 'center'
-    });
-
-    // Finalize the PDF file
+        // Check if an image URL was returned and has not been used already.
+        if (imageUrl) {
+            try {
+                const imageResponse = await fetch(imageUrl);
+                if (imageResponse.ok) {
+                    const imageBuffer = await imageResponse.buffer();
+                    // Add the image on a new page in the PDF.
+                    doc.addPage().image(imageBuffer, { fit: [500, 500], align: 'center', valign: 'center' });
+                } else {
+                    console.error("Failed to load image for PDF:", imageResponse.status);
+                }
+            } catch (error) {
+                console.error("Error fetching image for PDF:", error);
+            }
+        }
+    }
+    // Finalize the PDF
     doc.end();
 });
-
 
 
 
