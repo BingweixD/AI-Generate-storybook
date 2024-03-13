@@ -8,9 +8,10 @@ function App() {
   const [input, setInput] = useState("");
   const [chatLog, setChatlog] = useState([{
     role:"gpt", 
-      message: "Lets craft a children's story together! Share some key details to get started:\n\n1. **Setting**: Describe the story's location and time.\n2. **Characters**: Introduce the main characters, their traits, and any special abilities.\n3. **Plot**: Outline the main events and challenges.\n4. **Theme**: What's the story's moral or message?\n5. **Visual Elements**: Highlight any scenes or elements for illustrations.\n\nAdd any extra details for your story. After planning, we'll choose an art style for the illustrations. Consider styles or artists that inspire you for the artwork (e.g., watercolor, digital)."
+      message: "Lets craft and create a children's story step by step! Share some key details to get started: 1. Setting: Describe the story's location and time.2. Characters: Introduce the main characters, their traits, and any special abilities.\n3.Plot: Outline the main events and challenges.\n4.Theme: What's the story's moral or message?\n5.Visual Elements: Highlight any scenes or elements for illustrations.\n\nAdd any extra details for your story. After planning, choose an art style for the illustrations. Consider styles or artists that inspire you for the artwork (e.g., watercolor, digital). 6. Generate the full cohesive story with title based on the discussion."
     },
 ]);
+const [requestedPages, setRequestedPages] = useState(1); // Add this line
 async function handleGenerateImage() {
   const lastMessage = chatLog[chatLog.length - 1].message; // Get the last message from chatLog
   if (!lastMessage) {
@@ -41,18 +42,17 @@ async function handleGenerateImage() {
   }
 }
 
-async function generatePDF() {
-  // Get the last image URL from chatLog
+async function generatePDFWithPages() {
   const lastEntry = chatLog[chatLog.length - 1];
   const imageUrl = lastEntry.role === 'gpt' ? lastEntry.message.replace('Image URL: ', '') : null;
 
-  // Call the backend endpoint with the chatLog and imageUrl
+  // Include requestedPages in the request body
   const response = await fetch('http://localhost:3080/generate-pdf', {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ chatLog, imageUrl })
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ chatLog, imageUrl, requestedPages }) // Include requestedPages here
   });
 
   if (response.ok) {
@@ -123,7 +123,15 @@ async function handleSubmit(e) {
         </div>
         <div className ="chat-input-holder">
         <button onClick={handleGenerateImage}>Generate Image</button>
-        <button onClick={generatePDF}>Create PDF</button>
+        {/* <button onClick={generatePDF}>Create PDF</button> */}
+        <input 
+          type="number"
+          value={requestedPages}
+          onChange={(e) => setRequestedPages(e.target.value)}
+          placeholder="Number of Pages"
+          className="page-input" />
+          <button onClick={generatePDFWithPages}>Generate PDF with Pages</button>
+        
           <form onSubmit = {handleSubmit}>
             <input 
               rows="1"
