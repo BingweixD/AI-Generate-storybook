@@ -10,14 +10,25 @@
   from, to { border-color: transparent }
   50% { border-color: black }
 }
-@keyframes cursor-blink {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
+.typing {
+  overflow: hidden; /* Ensures the content is not revealed until the animation */
+  border-right: .15em solid black; /* The typwriter cursor */
+  white-space: nowrap; /* Keeps the content on a single line */
+  margin: 0 auto; /* Gives that scrolling effect as the typing happens */
+  letter-spacing: .15em; /* Adjust as needed */
+  animation: 
+    typing 3.5s steps(40, end),
+    blink-caret .75s step-end infinite;
 }
+.chat-log {
+  max-height: 80vh; /* Adjust based on your layout */
+  overflow-y: auto;
+}
+.message {
+  word-wrap: break-word;
+  word-break: break-word; /* Use break-all to break at any character */
+}
+
 
 
 .typing-animation {
@@ -74,7 +85,7 @@
   }
 }
 .chat-input-holder {
-  padding:24px;
+  padding: 12px;
   position:absolute;
   bottom:0;
   left:0;right: 0;
@@ -114,21 +125,50 @@
   padding-right: 24px;
   
 }
+.chat-message {
+  opacity: 0;
+  transform: scale(0.95);
+  animation: fadeInUp 0.3s ease forwards;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 .avatar {
   background-color: white;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  overflow: hidden; /* Ensures nothing spills outside the circle */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-right: 10px; /* Adjust as necessary */
+  flex-shrink: 0; /* Prevents the avatar from shrinking */
 }
+
+  
 .avatar.chatgpt {
   background-color:#0da37f;
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  width: 30px; /* Fixed width */
+  height: 30px; /* Fixed height */
+  overflow: hidden; /* Ensures nothing spills outside the circle */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-right: 10px;
 }
+
 .message {
-  padding-left: 40px;
-  padding-right: 40px;
+  background-color: #252b2f; /* Example background color for message bubble */
+  border-radius: 15px; /* Rounded corners for the message bubble */
+  margin-left: 10px; /* Space between the avatar and the message */
+  padding: 10px; /* Padding inside the message bubble */
+  flex-grow: 1; /* Allows the message bubble to grow */
 }
 
 .App-header {

@@ -19,47 +19,77 @@ app.use(cors());
 
 const PORT = 3080;
 
+function createCoverImagePrompt(story) {
+    // This is a placeholder function. You might want to implement a more sophisticated method
+    // to generate a summary or extract key elements from the story for the cover image prompt.
+    // For simplicity, we'll just take the first few sentences to hint at the theme.
+    const endIndex = findSplitIndex(story, 150); // Attempt to get the first 150 characters and then go to the end of the sentence.
+    return story.substring(0, endIndex) + "..."; // Return this as the prompt, indicating it's a snippet.
+}
 
-const generateImage = async (story, styleHints, previousAttributes, referenceImages = []) => {
-    try {
-        let prompt = `${story}.`; 
-        if (styleHints) {
-            prompt += ` The style should be consistent with ${styleHints}, influenced by [specific artists, art movements, or styles].`;
-        }
-        if (previousAttributes) {
-            prompt += ` This image should include ${previousAttributes}, maintaining the color palette and character design of previous images.`;
-        }
-        if (referenceImages.length > 0) {
-            prompt += ` Reference images are provided to maintain consistency.`;
-        }
-        prompt += "summerize the story and make sure there is no words in the image";
+async function generateImage(story, styleHints, previousAttributes, referenceImages = []) {
+    console.time("generateImage"); // Start timing
 
-        const response = await axios.post('https://api.openai.com/v1/images/generations', {
+    const coverPrompt = createCoverImagePrompt(story);
+    const splitIndex = findSplitIndex(story, Math.floor(story.length / 2));
+    const parts = [
+        story.substring(0, splitIndex),
+        story.substring(splitIndex),
+    ];
+    const prompts = [coverPrompt, ...parts];
+
+    const imagePromises = prompts.map((prompt, index) => {
+        if (index === 0) {
+            prompt = `Generate a cover image for a story with the following theme: "${prompt}"`;
+        } else {
+            prompt = `${prompt.trim()}.`;
+        }
+
+        if (styleHints) prompt += ` Style hints: ${styleHints}.`;
+        if (previousAttributes) prompt += ` Include ${previousAttributes}, maintaining the color palette and character design of previous images.`;
+        if (referenceImages && referenceImages.length > 0) prompt += ` Reference images are provided to maintain consistency.`;
+
+        return axios.post('https://api.openai.com/v1/images/generations', {
             model: "dall-e-3",
-            prompt: prompt,
+            prompt,
             n: 1,
             size: "1024x1024",
-            // If the API supports directly attaching reference images or their IDs, add them here
         }, {
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${DALLE_API_KEY}`
             }
-        });
-
-        if (response.data && response.data.data && response.data.data.length > 0) {
-            const imageUrl = response.data.data[0].url;
-            console.log("Generated Image URL:", imageUrl);
-            return imageUrl;
-        } else {
-            console.log("API response did not contain any images. Response:", response.data);
+        })
+        .then(response => {
+            if (response.data && response.data.data && response.data.data.length > 0) {
+                return response.data.data[0].url;
+            } else {
+                console.log("API response did not contain any images. Response:", response.data);
+                return '';
+            }
+        })
+        .catch(error => {
+            console.error("An error occurred while generating the image:", error);
             return '';
-        }
+        });
+    });
+
+    try {
+        const start = performance.now(); // Start performance timer
+        const imageUrls = await Promise.all(imagePromises);
+        const end = performance.now(); // End performance timer
+        console.log(`Image generation took ${end - start} milliseconds.`);
+
+        console.timeEnd("generateImage"); // End timing
+        return imageUrls;
     } catch (error) {
-        console.error("An error occurred while generating the image:", error.response ? error.response.data : error.message);
-        return '';
+        console.error("An error occurred while generating images:", error);
+        console.timeEnd("generateImage"); // End timing even if there's an error
+        return [];
     }
-};
+}
+
+
 
 
 const callApi = async (userMessage, chatLog) => {
@@ -171,29 +201,65 @@ app.post('/generate-image', async (req, res) => {
     console.log('Received prompt for image generation:', prompt);
 
     try {
-        const imageUrl = await generateImage(prompt, styleHints, previousAttributes);
-        if (!imageUrl) {
-            console.error("Failed to generate image.");
-            return res.status(400).json({ error: 'Failed to generate an image.' });
+        // Now, generateImage returns an array of image URLs
+        const imageUrls = await generateImage(prompt, styleHints, previousAttributes);
+        if (!imageUrls || imageUrls.length === 0) {
+            console.error("Failed to generate images.");
+            return res.status(400).json({ error: 'Failed to generate images.' });
         }
 
-        res.json({ imageUrl });
+        res.json({ imageUrls }); // Send back an array of URLs
     } catch (error) {
         console.error("Error handling image generation request:", error);
         res.status(500).json({ error: error.message });
     }
 });
-function getNextImageUrl(chatLog, currentIndex, usedImageUrls) {
-    for (let i = currentIndex + 1; i < chatLog.length; i++) {
-        if (chatLog[i].message.startsWith('Image URL: ') && !usedImageUrls.has(chatLog[i].message)) {
-            usedImageUrls.add(chatLog[i].message);
-            return chatLog[i].message.replace('Image URL: ', '');
+function findSplitIndex(story, startApproxIndex) {
+    // Find the nearest full stop after the approximate split index
+    let index = story.indexOf('.', startApproxIndex);
+    return index !== -1 ? index + 1 : startApproxIndex; // Return the index right after the full stop or the original index if not found
+}
+function getNextImageUrl(chatLog, usedImageUrls) {
+    for (let entry of chatLog) {
+        if (entry.message.startsWith('Image URL: ') && !usedImageUrls.has(entry.message)) {
+            usedImageUrls.add(entry.message);
+            return entry.message.replace('Image URL: ', '');
         }
     }
-    return null; // Return null if there's no image URL after the current text entry.
+    return null; // Return null if there's no next image URL.
 }
+function extractFlexibleTitle(storyText) {
+    // Normalize line endings
+    storyText = storyText.replace(/\r\n/g, "\n");
+
+    // Attempt to match a quoted title that appears immediately after a specific intro or standalone
+    const introPattern = /(?:discussion:|Certainly! Here's the full story based on our discussion:)\s*"([^"]+)"/i;
+    const standaloneQuotePattern = /^"([^"]+)"/;
+    
+    // Check for an explicit "Title:" marker or quoted title following an introduction
+    let titleMatch = storyText.match(introPattern) || storyText.match(standaloneQuotePattern);
+    if (titleMatch && titleMatch[1]) {
+        return titleMatch[1].trim();
+    }
+
+    // Check for an explicit "Title:" marker without introduction
+    titleMatch = storyText.match(/^Title:\s*(.+)/i);
+    if (titleMatch) {
+        return titleMatch[1].trim();
+    }
+
+    // Fallback to using the first significant text as the title if no pattern matches
+    let firstSignificantText = storyText.split(/[\n\.]/, 1)[0];
+    return firstSignificantText.trim();
+}
+
+
 app.post('/generate-pdf', async (req, res) => {
-    const { chatLog, requestedPages } = req.body;
+    const { chatLog } = req.body;
+
+    // Assuming `chatLog` contains the full story text in a format you can use
+    const storyContent = "StoryBook"; // Placeholder, replace with actual content
+    const title = extractFlexibleTitle(storyContent);
 
     const doc = new PDFDocument();
     const buffers = [];
@@ -207,49 +273,114 @@ app.post('/generate-pdf', async (req, res) => {
         }).end(pdfData);
     });
 
-    // Sort and select text responses
-    let selectedTextResponses = chatLog.filter(entry => entry.role === 'gpt' && !entry.message.startsWith('Image URL: '))
-    
-                                       .map((entry, index) => ({ ...entry, originalIndex: index }))
-                                       .sort((a, b) => b.message.length - a.message.length)
-                                       .slice(0, requestedPages)
-                                       .sort((a, b) => a.originalIndex - b.originalIndex);
+    // Add the title to the PDF before adding the cover image
+    doc.fontSize(24) // Adjust the size as needed
+       .font('Helvetica-Bold') // You can choose any font you prefer
+       .text(title, {
+           align: 'center',
+           underline: false, // Set to true if you want the title underlined
+       })
+       .moveDown(2); // Adjust space between the title and the image as needed
 
-    // Process each selected text response and fetch its corresponding image
-    for (const response of selectedTextResponses) {
-        // Add text to the PDF
+    // Extract the cover image URL
+    let coverImageUrl = getNextImageUrl(chatLog, usedImageUrls);
+    if (coverImageUrl) {
+        try {
+            const coverImageResponse = await fetch(coverImageUrl);
+            if (coverImageResponse.ok) {
+                const coverImageBuffer = await coverImageResponse.buffer();
+                // Consider adjusting the positioning if needed
+                doc.image(coverImageBuffer, {
+                    fit: [500, 400], // You might want to adjust the size to fit the title
+                    align: 'center',
+                    valign: 'center'
+                })
+                .addPage(); // Ensure the story starts on a new page
+            } else {
+                console.error("Failed to load cover image for PDF:", coverImageResponse.statusText);
+            }
+        } catch (error) {
+            console.error("Error fetching cover image for PDF:", error);
+        }
+    }
+
+    const longestStory = chatLog.filter(entry => entry.role === 'gpt' && !entry.message.startsWith('Image URL: '))
+                                 .reduce((longest, current) => current.message.length > longest.message.length ? current : longest, {message: ""}).message;
+
+    // Calculate approximate split points
+    const firstSplit = Math.floor(longestStory.length / 3);
+    const secondSplit = Math.floor(2 * longestStory.length / 3);
+
+    // Adjust split points to the nearest sentence end
+    const firstSplitIndex = findSplitIndex(longestStory, firstSplit);
+    const secondSplitIndex = findSplitIndex(longestStory, secondSplit);
+
+    // Split the story
+    const parts = [
+        longestStory.substring(0, firstSplitIndex),
+        longestStory.substring(firstSplitIndex, secondSplitIndex),
+        longestStory.substring(secondSplitIndex)
+    ];
+
+    for (const part of parts) {
         doc.addPage();
-        doc.font('Times-Roman').fontSize(14).fillColor('blue');
-        doc.text(response.message, {
+        doc.font('Times-Roman').fontSize(14).fillColor('blue').text(part.trim(), {
             paragraphGap: 5,
             indent: 20,
             align: 'justify',
             columns: 1,
         });
-        // Fetch the image associated with this text entry
-        let imageUrl = getNextImageUrl(chatLog, response.originalIndex, usedImageUrls); // Pass usedImageUrls here
 
-        // Check if an image URL was returned and has not been used already.
+        let imageUrl = getNextImageUrl(chatLog, usedImageUrls);
         if (imageUrl) {
             try {
                 const imageResponse = await fetch(imageUrl);
                 if (imageResponse.ok) {
                     const imageBuffer = await imageResponse.buffer();
-                    // Add the image on a new page in the PDF.
-                    doc.addPage().image(imageBuffer, { fit: [500, 500], align: 'center', valign: 'center' });
+                    // Adding image on the same page if possible, adjust as needed
+                    doc.addPage(); // You might want to adjust this part to better handle image placement
+                    doc.image(imageBuffer, { fit: [500, 500], align: 'center', valign: 'center' });
                 } else {
-                    console.error("Failed to load image for PDF:", imageResponse.status);
+                    console.error("Failed to load image for PDF:", imageResponse.statusText);
                 }
             } catch (error) {
                 console.error("Error fetching image for PDF:", error);
             }
         }
     }
-    // Finalize the PDF
+
     doc.end();
 });
 
+// app.get('/download-pdf/:pdfId', async (req, res) => {
+//     const { pdfId } = req.params;
 
+//     try {
+//         const [rows] = await db.query('SELECT pdf FROM pdfs WHERE id = ?', [pdfId]);
+//         if (rows.length > 0) {
+//             const pdfBuffer = rows[0].pdf;
+//             res.writeHead(200, {
+//                 'Content-Type': 'application/pdf',
+//                 'Content-Disposition': 'attachment; filename="story.pdf"'
+//             }).end(pdfBuffer);
+//         } else {
+//             res.status(404).send('PDF not found');
+//         }
+//     } catch (error) {
+//         console.error("Error fetching PDF from database:", error);
+//         res.status(500).send('Failed to download PDF');
+//     }
+// });
+
+// app.get('/stories', async (req, res) => {
+//     try {
+//         const [stories] = await db.query('SELECT id, title, created_at FROM stories');
+//         res.json(stories);
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).send('Internal Server Error');
+//     }
+// });
 
 
 app.listen(PORT, () => {
